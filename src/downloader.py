@@ -5,8 +5,10 @@ from urllib.parse import urlparse
 import requests
 from mediawiki import MediaWiki, MediaWikiPage
 
-
 #
+from src.utilities import verify_dir
+
+
 class Person:
     name = ''
     image_links = []
@@ -20,8 +22,10 @@ class Person:
 
 
 def retrieve_images(page_names: Dict, wikiObj, output_location='/home/tford5/faces_datasets/wikipedia/'):
-    for person in page_names.values():
-        output_path = f'{output_location}/{person.name}/'
+    for key, person in page_names.items():
+        folder_name = key.lower().replace(' ', '_')
+        output_path = f'{output_location}/{folder_name}/'
+        verify_dir(output_path)
         for idx, link in enumerate(person.image_links):
             r = requests.get(link)
             parsed = urlparse(link)
