@@ -4,7 +4,7 @@ from typing import Dict
 from urllib.parse import urlparse
 
 import requests
-from mediawiki import DisambiguationError, MediaWiki, MediaWikiPage
+from mediawiki import MediaWiki
 
 from src.utilities import verify_dir, verify_file
 
@@ -76,22 +76,7 @@ if __name__ == '__main__':
                 if not p.startswith('Template:'):
                     if not p.startswith('Wikipedia:'):
                         # attempt to pull the page and handle disambiguation errors are they appear
-                        try:
-                            page: MediaWikiPage = wikipedia.page(title=p)
-                        except DisambiguationError as e:
-                            for candidate_page in e.options:
-                                cp = wikipedia.page(title=candidate_page, auto_suggest=False)
-                                if r in cp.categories:
-                                    page: MediaWikiPage = cp
-                        except Exception as e:
-                            for candidate_page in e.options:
-                                cp = wikipedia.page(title=candidate_page, auto_suggest=False)
-                                if r in cp.categories:
-                                    page: MediaWikiPage = cp
-                        if not page:
-                            print("Disambiguation Error unresolved.")
-                            break
-
+                        page = wikipedia.page(title=p, auto_suggest=False)
                         person = Person(p)
                         # print([' stubs' in cat for cat in page.categories], page.categories)
                         if page.categories and not any([' stubs' in cat for cat in page.categories]):
