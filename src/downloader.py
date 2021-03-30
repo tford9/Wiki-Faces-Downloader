@@ -1,11 +1,11 @@
 import os
+from argparse import ArgumentParser as ArgP
 from typing import Dict
 from urllib.parse import urlparse
 
 import requests
 from mediawiki import MediaWiki, MediaWikiPage
 
-#
 from src.utilities import verify_dir
 
 
@@ -41,7 +41,18 @@ def retrieve_images(page_names: Dict, wikiObj, output_location='/home/tford5/fac
 
 
 if __name__ == '__main__':
-    keys = ['indonesian politician']
+
+    parser = ArgP()
+    parser.add_argument('-i', '--categories', dest='categories', nargs='*',
+                        help='mediawiki categories to search from (i.e. `indonesian politician`)')
+    parser.add_argument('-o', '--output', dest='output_location',
+                        help='Location where output will be saved')
+    args = parser.parse_args()
+
+    print(args.output_location)
+    print(args.categories)
+    exit()
+    keys = args.categories
     wikipedia = MediaWiki()
     categories = wikipedia.categorytree(keys, depth=500)
     people_pages = dict()
@@ -76,4 +87,4 @@ if __name__ == '__main__':
                                         person.add_image_links(link)
 
     print(people_pages)
-    retrieve_images(people_pages, wikipedia)
+    retrieve_images(people_pages, wikipedia, output_location=args.output_location)
