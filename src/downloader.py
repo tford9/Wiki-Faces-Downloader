@@ -1,10 +1,10 @@
 import os
 from argparse import ArgumentParser as ArgP
-from typing import Dict, List
+from typing import Dict
 from urllib.parse import urlparse
 
 import requests
-from mediawiki import MediaWiki, MediaWikiPage
+from mediawiki import DisambiguationError, MediaWiki, MediaWikiPage
 
 from src.utilities import verify_dir, verify_file
 
@@ -75,26 +75,40 @@ if __name__ == '__main__':
             for p in pages:
                 if not p.startswith('Template:'):
                     if not p.startswith('Wikipedia:'):
-                        candidate_pages: List[MediaWikiPage] = wikipedia.allpages(query=p)
-                        candidate_pages = [x for x in candidate_pages if r in x.categories]
-                        for page in candidate_pages:
-                            person = Person(page.title)
-                            # print([' stubs' in cat for cat in page.categories], page.categories)
-                            if page.categories and not any([' stubs' in cat for cat in page.categories]):
-                                image_links = page.images
-                                for link in image_links:
-                                    parsed = urlparse(link)
-                                    filename = os.path.basename(parsed.path)
-                                    # print(filename)
-                                    # print(p)
-                                    if ' ' in p:
-                                        if p.split(' ')[0] in filename or p.split(' ')[1] in filename:
-                                            print(page.url)
-                                            if p not in people_pages:
-                                                people_pages[page.title] = person
-                                            else:
-                                                person = people_pages[page.title]
-                                            person.add_image_links(link)
+                        # attempt to pull the page and handle disambiguation errors are they appear
+                        try:
+                            page: MediaWikiPage = wikipedia.page(title=p)
+                        except DisambiguationError as e:
+                            for candidate_page in e.options:
+                                cp = wikipedia.page(title=candidate_page, auto_suggest=False)
+                                if r in cp.categories:
+                                    page: MediaWikiPage = cp
+                        except Exception as e:
+                            for candidate_page in e.options:
+                                cp = wikipedia.page(title=candidate_page, auto_suggest=False)
+                                if r in cp.categories:
+                                    page: MediaWikiPage = cp
+                        if not page:
+                            print("Disambiguation Error unresolved.")
+                            break
+
+                        person = Person(p)
+                        # print([' stubs' in cat for cat in page.categories], page.categories)
+                        if page.categories and not any([' stubs' in cat for cat in page.categories]):
+                            image_links = page.images
+                            for link in image_links:
+                                parsed = urlparse(link)
+                                filename = os.path.basename(parsed.path)
+                                # print(filename)
+                                # print(p)
+                                if ' ' in p:
+                                    if p.split(' ')[0] in filename or p.split(' ')[1] in filename:
+                                        print(page.url)
+                                        if p not in people_pages:
+                                            people_pages[p] = person
+                                        else:
+                                            person = people_pages[p]
+                                        person.add_image_links(link)
 
     print(people_pages)
     retrieve_images(people_pages, wikipedia, output_location=args.output_location)
