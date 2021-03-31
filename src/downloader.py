@@ -84,16 +84,15 @@ if __name__ == '__main__':
                             for link in image_links:
                                 parsed = urlparse(link)
                                 filename = os.path.basename(parsed.path)
-                                # print(filename)
-                                # print(p)
+                                print(filename)
                                 if ' ' in p:
-                                    if p.split(' ')[0] in filename or p.split(' ')[1] in filename:
+                                    if any([True for x in p.split(' ') if x in filename]):
+                                        # if p.split(' ')[0] in filename or p.split(' ')[1] in filename:
                                         print(page.url)
                                         if p not in people_pages:
                                             people_pages[p] = person
                                         else:
                                             person = people_pages[p]
                                         person.add_image_links(link)
-
     print(people_pages)
     retrieve_images(people_pages, wikipedia, output_location=args.output_location)
