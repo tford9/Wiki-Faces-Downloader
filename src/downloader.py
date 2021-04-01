@@ -1,10 +1,10 @@
 import os
 from argparse import ArgumentParser as ArgP
-from typing import Dict
+from typing import Dict, Set
 from urllib.parse import urlparse
 
 import requests
-from mediawiki import MediaWiki
+from mediawiki import MediaWiki, MediaWikiPage
 
 from src.utilities import verify_dir, verify_file
 
@@ -62,37 +62,53 @@ if __name__ == '__main__':
     # exit()
     keys = args.categories
     wikipedia = MediaWiki()
-    categories = wikipedia.categorytree(keys, depth=500)
+    categories = wikipedia.categorytree(keys, depth=50)
     people_pages = dict()
 
-    for k in keys:
+
+    # yes it's recursive
+    def get_pages(category, depth=0) -> Set:
+        pgs: Set = set()
+        scs: Set = set()
+        for cat in category:
+            data = wikipedia.categorymembers(category=cat, results=1000, subcategories=True)
+            pgs.update(data[0])
+            scs.update(data[1])
+        if depth >= 50 or len(scs) == 0:
+            return pgs
+        pgs.update(get_pages(scs, depth=depth + 1))
+        return pgs
+
+        # for k in keys:
         related_categories = categories[k]['parent-categories']
-        for r in related_categories:
-            # print(r)
-            pages = wikipedia.categorymembers(category=r, results=1000, subcategories=True)[0]
-            # print(pages)
-            # print(type(pages))
-            for p in pages:
-                if not p.startswith('Template:'):
-                    if not p.startswith('Wikipedia:'):
-                        # attempt to pull the page and handle disambiguation errors are they appear
-                        page = wikipedia.page(title=p, auto_suggest=False)
-                        person = Person(p)
-                        # print([' stubs' in cat for cat in page.categories], page.categories)
-                        if page.categories and not any([' stubs' in cat for cat in page.categories]):
-                            image_links = page.images
-                            for link in image_links:
-                                parsed = urlparse(link)
-                                filename = os.path.basename(parsed.path)
-                                print(filename)
-                                if ' ' in p:
-                                    if any([True for x in p.split(' ') if x in filename]):
-                                        # if p.split(' ')[0] in filename or p.split(' ')[1] in filename:
-                                        print(page.url)
-                                        if p not in people_pages:
-                                            people_pages[p] = person
-                                        else:
-                                            person = people_pages[p]
-                                        person.add_image_links(link)
+        # for r in related_categories:
+        # print(r)
+
+
+    pages = get_pages(keys)
+    nonperson_pages = 0
+    for p in pages:
+        nonperson_pages += 1
+        if not p.startswith('Template:') and not p.startswith('Wikipedia:'):
+            # attempt to pull the page and handle disambiguation errors are they appear
+            page: MediaWikiPage = wikipedia.page(title=p, auto_suggest=False)
+            if any(['people' in cat for cat in page.categories]) or 'born' in page.summary:
+                nonperson_pages -= 1
+                person = Person(p)
+                if page.categories and not any([' stubs' in cat for cat in page.categories]):
+                    image_links = page.images
+                    for link in image_links:
+                        parsed = urlparse(link)
+                        filename = os.path.basename(parsed.path)
+                        # print(filename)
+                        tokenized_name = []
+                        if ' ' in p and any([True for x in p.split(' ') if x in filename]):
+                            print(page.url)
+                            if p not in people_pages:
+                                people_pages[p] = person
+                            else:
+                                person = people_pages[p]
+                        person.add_image_links(link)
     print(people_pages)
+    print("Pages ignored: ", nonperson_pages)
     retrieve_images(people_pages, wikipedia, output_location=args.output_location)
