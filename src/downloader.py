@@ -1,5 +1,6 @@
 import os
 import pickle
+import urllib
 from argparse import ArgumentParser as ArgP
 from typing import Dict, Set
 from urllib.parse import urlparse
@@ -8,11 +9,12 @@ import requests
 from mediawiki import MediaWiki, MediaWikiPage
 from tqdm import tqdm
 
-from src.utilities import Person, verify_dir, verify_file
+from utilities import Person, verify_dir, verify_file
 
 
 def retrieve_images(page_names: Dict, wikiObj, output_location='/data/tford5/faces_datasets/wikipedia/'):
     skipped_downloads = 0
+    keep_characters = (' ', '.', '_')
     for key, person in tqdm(page_names.items(), desc='Processing Image Downloads'):
         folder_name = key.lower().replace(' ', '_')
         output_path = f'{output_location}/{folder_name}/'
@@ -22,14 +24,16 @@ def retrieve_images(page_names: Dict, wikiObj, output_location='/data/tford5/fac
             # get filename
             parsed = urlparse(l)
             filename = os.path.basename(parsed.path)
-            filename = filename.split('.')[0]
+            # filename = filename.split('.')[0]
+            filename = urllib.parse.unquote(filename)
+            filename = "".join(c for c in filename if c.isalnum() or c in keep_characters).rstrip()
             # check if file already exists in the location
             if verify_file(output_path + str(filename)):
                 skipped_downloads += 1
                 break
             r = requests.get(l)
             # the output images may not actually be jpgs
-            output_filename = os.path.abspath(f'{output_path}/{filename}.jpg')
+            output_filename = os.path.abspath(f'{output_path}/{filename}')
             with open(output_filename, 'wb') as f:
                 f.write(r.content)
             person.add_image_location(l, output_location)
@@ -49,11 +53,15 @@ if __name__ == '__main__':
     print(args.output_location)
     print(args.categories)
     initial_categories = set(args.categories)
+    first_cat = args.categories[0].replace(' ', '_')
     wikipedia = MediaWiki(rate_limit=False)
     print('Collecting Initial Categories...')
     categories = wikipedia.categorytree(list(initial_categories), depth=1)
     print(f'Initial Categories Collected: {len(categories)}')
     people_pages = {}
+
+    cat_output_directory = args.output_location + '/' + first_cat + '/'
+    verify_dir(cat_output_directory)
 
 
     # yes it's recursive
@@ -83,7 +91,7 @@ if __name__ == '__main__':
 
     print('Getting Extended Categories...')
     max_depth = 50
-    cache_filename = f'/data/tford5/faces_datasets/wikipedia/cached_{len(initial_categories)}.pkl'
+    cache_filename = f'{cat_output_directory}cached_{len(initial_categories)}.pkl'
     if not verify_file(cache_filename):
         pbar = tqdm(total=max_depth, desc="Descent")
         pbar2 = tqdm(total=max_depth, desc="Ascent")
@@ -94,31 +102,35 @@ if __name__ == '__main__':
         with open(cache_filename, 'rb') as f:
             pages = pickle.load(f)
 
-    print(f'Number of Pages Collected: {len(pages)}')
-    nonperson_pages = 0
+    cache_filename = f'{cat_output_directory}/cached_{len(initial_categories)}_dis_pages.pkl'
     dis_pages = []
-    for p in tqdm(pages, desc="Processing pages"):
-        nonperson_pages += 1
-        if not p.startswith('Template:') and not p.startswith('Wikipedia:'):
-            # attempt to pull the page and handle disambiguation errors are they appear
-            try:
-                page: MediaWikiPage = wikipedia.page(title=p, auto_suggest=False)
-            except Exception as e:
-                dis_pages.append(e)
-            if any(['people' in cat for cat in page.categories]) or 'born' in page.summary:
-                nonperson_pages -= 1
-                if page.categories and not any([' stubs' in cat for cat in page.categories]):
-                    for img_link in page.images:
-                        parsed = urlparse(img_link)
-                        filename = os.path.basename(parsed.path)
-                        if ' ' in p and any([True for x in p.lower().split(' ') if x in filename.lower()]):
-                            if p not in people_pages:
-                                people_pages[p] = Person(p)
-                                people_pages[p].set_page_url(page.url)
-                            people_pages[p].add_image_links(img_link)
-    # print(people_pages)
-    # for x in people_pages.items():
-    #     print(x)
-    print("Pages ignored: ", nonperson_pages)
+    if not verify_file(cache_filename):
+        print(f'Number of Pages Collected: {len(pages)}')
+        nonperson_pages = 0
+        for p in tqdm(pages, desc="Processing pages"):
+            nonperson_pages += 1
+            if not p.startswith('Template:') and not p.startswith('Wikipedia:'):
+                # attempt to pull the page and handle disambiguation errors are they appear
+                try:
+                    page: MediaWikiPage = wikipedia.page(title=p, auto_suggest=False)
+                except Exception as e:
+                    dis_pages.append(e)
+                if any(['people' in cat for cat in page.categories]) or 'born' in page.summary:
+                    nonperson_pages -= 1
+                    if page.categories and not any([' stubs' in cat for cat in page.categories]):
+                        for img_link in page.images:
+                            parsed = urlparse(img_link)
+                            filename = os.path.basename(parsed.path)
+                            if ' ' in p and any([True for x in p.lower().split(' ') if x in filename.lower()]):
+                                if p not in people_pages:
+                                    people_pages[p] = Person(p)
+                                    people_pages[p].set_page_url(page.url)
+                                people_pages[p].add_image_links(img_link)
+        with open(cache_filename, 'wb') as f:
+            pickle.dump(people_pages, file=f)
+        print("Pages ignored: ", nonperson_pages)
+    else:
+        with open(cache_filename, 'rb') as f:
+            people_pages = pickle.load(f)
     print(f"Dis Pages: {len(dis_pages)}")
-    retrieve_images(people_pages, wikipedia, output_location=args.output_location)
+    retrieve_images(people_pages, wikipedia, output_location=cat_output_directory)
