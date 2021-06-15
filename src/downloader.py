@@ -2,6 +2,7 @@ import os
 import pickle
 import urllib
 from argparse import ArgumentParser as ArgP
+from time import sleep
 from typing import Dict, Set
 from urllib.parse import urlparse
 
@@ -12,8 +13,9 @@ from tqdm import tqdm
 from utilities import Person, verify_dir, verify_file
 
 
-def retrieve_images(page_names: Dict, wikiObj, output_location='/data/tford5/faces_datasets/wikipedia/'):
+def retrieve_images(page_names: Dict, output_location='./data/wiki/'):
     skipped_downloads = 0
+    failed_downloads = 0
     keep_characters = (' ', '.', '_')
     for key, person in tqdm(page_names.items(), desc='Processing Image Downloads'):
         folder_name = key.lower().replace(' ', '_')
@@ -31,13 +33,18 @@ def retrieve_images(page_names: Dict, wikiObj, output_location='/data/tford5/fac
             if verify_file(output_path + str(filename)):
                 skipped_downloads += 1
                 break
-            r = requests.get(l)
-            # the output images may not actually be jpgs
-            output_filename = os.path.abspath(f'{output_path}/{filename}')
-            with open(output_filename, 'wb') as f:
-                f.write(r.content)
-            person.add_image_location(l, output_location)
+            try:
+                r = requests.get(l)
+                # the output images may not actually be jpgs
+                output_filename = os.path.abspath(f'{output_path}/{filename}')
+                with open(output_filename, 'wb') as f:
+                    f.write(r.content)
+                person.add_image_location(l, output_location)
+            except ConnectionError as e:
+                failed_downloads += 1
+                continue
     print(f'Skipped Downloads: {skipped_downloads}')
+    print(f'Failed Downloads: {failed_downloads}')
     return page_names
 
 
@@ -64,14 +71,36 @@ if __name__ == '__main__':
     verify_dir(cat_output_directory)
 
 
+    def get_data(category, results):
+        data = None
+        attempts = 0
+        failed = True
+        while data is None and attempts < 10:
+            attempts += 1
+            try:
+                data = wikipedia.categorymembers(category=category, results=results)
+                failed = False
+            except Exception as e:
+                failed = True
+                data = None
+                print(f'ReadTimeout')
+                sleep(10 * attempts)
+        if failed:
+            print(f'ReadTimeout caused failure to retrieve after repeated timeouts. For Subcat {category}')
+            return (set(), category)
+        return data
+
+
     # yes it's recursive
-    def get_pages(category, seen_categories=set(), depth=0, max_depth=50) -> Set:
+    def get_pages(category, seen_categories=None, depth=0, max_depth=25) -> Set:
+        if seen_categories is None:
+            seen_categories = set()
         pbar.update(1)
         pgs: Set = set()  # pages collected
         scs: Set = set()  # categories collected
         unseen_categories = category.difference(seen_categories)
         for cat in unseen_categories:
-            data = wikipedia.categorymembers(category=cat, results=100, subcategories=True)
+            data = get_data(category=cat, results=10000)
             pgs.update(data[0])
             scs.update(data[1])
             seen_categories.add(cat)
@@ -90,8 +119,8 @@ if __name__ == '__main__':
 
 
     print('Getting Extended Categories...')
-    max_depth = 50
-    cache_filename = f'{cat_output_directory}cached_{len(initial_categories)}.pkl'
+    max_depth = 25
+    cache_filename = f'{cat_output_directory}cached_{args.categories[0]}.pkl'
     if not verify_file(cache_filename):
         pbar = tqdm(total=max_depth, desc="Descent")
         pbar2 = tqdm(total=max_depth, desc="Ascent")
