@@ -12,16 +12,68 @@ from tqdm import tqdm
 
 from utilities import Person, verify_dir, verify_file
 
+from PIL import Image
+from io import BytesIO
+import numpy as np
+# face detction package
+from facenet_pytorch import MTCNN
 
-def retrieve_images(page_names: Dict, output_location='./data/wiki/'):
+def crop(image, bbox, margin=20, square=False, dy_margin=False):
+    """Crop the image given bounding box.
+    Params: 
+        image: a numpy array
+        bbox: a numpy array [left, top, right, bottom]
+        margin: <int> margin for cropping face
+    Return: 
+        patch: a numpy array
+    """
+    h, w = image.shape[:2]
+    if dy_margin:
+        face_w, face_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        bbox[0], bbox[1], bbox[2], bbox[3] = bbox[0] - face_w/2, bbox[1] - face_h/2, bbox[2] + face_w/2, bbox[3] + face_h/2
+    else:
+        bbox[0], bbox[1], bbox[2], bbox[3] = bbox[0] - margin, bbox[1] - margin, bbox[2] + margin, bbox[3] + margin
+    if square:
+        bbox[2] = max(bbox[2] - bbox[0], bbox[3] - bbox[1]) + bbox[0]
+        bbox[3] = max(bbox[2] - bbox[0], bbox[3] - bbox[1]) + bbox[1]
+    bbox = bbox.astype(int)
+    bbox[bbox < 0] = 0
+    bbox[2] = min(bbox[2], w)
+    bbox[3] = min(bbox[3], h)
+    return image[bbox[1]:bbox[3], bbox[0]:bbox[2]]
+
+def retrieve_images(page_names: Dict, output_location='./data/wiki/', doFace_detection=False):
     skipped_downloads = 0
     failed_downloads = 0
     keep_characters = (' ', '.', '_')
+
+    # get the face detection model
+    # device = 'cuda:1'
+    mtcnn = MTCNN(image_size=256, margin=20, keep_all=True)
+
+    def face_detect(image: Image, file_path, thredshold=0.8):
+        face_locations, probs, landmarks = mtcnn.detect(image, landmarks=True)
+        face_list = []
+        
+        if face_locations is None or len(face_locations) == 0:
+            print("   Fail to find face in %s" % (file_path))
+        else: 
+            # iterate all the faces
+            for idx, location in enumerate(face_locations):
+                if probs[idx] < thredshold:
+                    continue
+                left, top, right, bottom = location
+                bbox = np.array([left, top, right, bottom])
+                face = crop(np.array(image), bbox)
+                face = Image.fromarray(face)
+                face_list.append(face)
+        return  face_list
+
     for key, person in tqdm(page_names.items(), desc='Processing Image Downloads'):
         folder_name = key.lower().replace(' ', '_')
         output_path = f'{output_location}/{folder_name}/'
         verify_dir(output_path)
-
+    
         for idx, l in enumerate(person.image_links):
             # get filename
             _parsed = urlparse(l)
@@ -35,11 +87,31 @@ def retrieve_images(page_names: Dict, output_location='./data/wiki/'):
                 break
             try:
                 r = requests.get(l)
-                # the output images may not actually be jpgs
-                output_filename = os.path.abspath(f'{output_path}/{_filename}')
-                with open(output_filename, 'wb') as f:
-                    f.write(r.content)
-                person.add_image_location(l, output_location)
+                if not doFace_detection:
+                    # the output images may not actually be jpgs
+                    output_filename = os.path.abspath(f'{output_path}/{_filename}')
+                    with open(output_filename, 'wb') as f:
+                        f.write(r.content)
+                    person.add_image_location(l, output_location)
+                else:
+                    # convert the binary data into an image
+                    try:
+                        img = Image.open(BytesIO(r.content)).convert("RGB")
+                    except Exception as e:
+                        print(f"    Cannot identify image file {l}")         
+
+                    faces = face_detect(img, l)
+                    if not len(faces):
+                        continue
+                    ext_idx = _filename.rfind(".")
+                    _filename_ = _filename[:ext_idx]
+                    _ext_ = _filename[ext_idx:]
+                    for idx, face in enumerate(faces):
+                        # _filename, _ext = os.path.splitext(_filename)
+                        output_filename = os.path.abspath(f'{output_path}/{_filename_}-p{idx}.jpg')
+                        face.save(output_filename)
+                    person.add_image_location(l, output_location)   
+
             except ConnectionError as e:
                 failed_downloads += 1
                 continue
@@ -52,9 +124,11 @@ if __name__ == '__main__':
 
     parser = ArgP()
     parser.add_argument('-i', '--categories', dest='categories', nargs='*',
-                        help='mediawiki categories to search from (i.e. `indonesian politician`)')
+                        help='mediawiki categories to search from (i.e. `indonesian politicians`)')
     parser.add_argument('-o', '--output', dest='output_location',
                         help='Location where output will be saved')
+    parser.add_argument('-d', '--face-detection', dest='doFace_detection', action='store_true',
+                        help='enable do face detection during the image downloading')
     args = parser.parse_args()
 
     print(args.output_location)
@@ -113,7 +187,7 @@ if __name__ == '__main__':
 
 
     print('Getting Extended Categories...')
-    max_depth = 25
+    max_depth = 2
     cache_filename = f'{cat_output_directory}cached_{args.categories[0]}.pkl'
     if not verify_file(cache_filename):
         pbar = tqdm(total=max_depth, desc="Descent")
@@ -156,4 +230,7 @@ if __name__ == '__main__':
         with open(cache_filename, 'rb') as f:
             people_pages = pickle.load(f)
     print(f"Dis Pages: {len(dis_pages)}")
-    retrieve_images(people_pages, output_location=cat_output_directory)
+
+    doFace_detection = args.doFace_detection
+    print(f"We are doing face detect: {doFace_detection}")
+    retrieve_images(people_pages, output_location=cat_output_directory, doFace_detection=doFace_detection)
