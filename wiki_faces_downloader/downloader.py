@@ -24,19 +24,19 @@ def retrieve_images(page_names: Dict, output_location='./data/wiki/'):
 
         for idx, l in enumerate(person.image_links):
             # get filename
-            parsed = urlparse(l)
-            filename = os.path.basename(parsed.path)
+            _parsed = urlparse(l)
+            _filename = os.path.basename(_parsed.path)
             # filename = filename.split('.')[0]
-            filename = urllib.parse.unquote(filename)
-            filename = "".join(c for c in filename if c.isalnum() or c in keep_characters).rstrip()
+            _filename = urllib.parse.unquote(_filename)
+            _filename = "".join(c for c in _filename if c.isalnum() or c in keep_characters).rstrip()
             # check if file already exists in the location
-            if verify_file(output_path + str(filename)):
+            if verify_file(output_path + str(_filename)):
                 skipped_downloads += 1
                 break
             try:
                 r = requests.get(l)
                 # the output images may not actually be jpgs
-                output_filename = os.path.abspath(f'{output_path}/{filename}')
+                output_filename = os.path.abspath(f'{output_path}/{_filename}')
                 with open(output_filename, 'wb') as f:
                     f.write(r.content)
                 person.add_image_location(l, output_location)
@@ -91,8 +91,7 @@ if __name__ == '__main__':
         return data
 
 
-    # yes it's recursive
-    def get_pages(category, seen_categories=None, depth=0, max_depth=25) -> Set:
+    def get_pages(category, seen_categories=None, depth=0, max_depth=2) -> Set:
         if seen_categories is None:
             seen_categories = set()
         pbar.update(1)
@@ -111,11 +110,6 @@ if __name__ == '__main__':
         pgs.update(get_pages(scs, seen_categories=seen_categories, depth=depth + 1, max_depth=max_depth))
         pbar2.update(1)
         return pgs
-
-        # for k in initial_categories:
-        # related_categories = categories[k]['parent-categories']
-        # for r in related_categories:
-        # print(r)
 
 
     print('Getting Extended Categories...')
@@ -162,4 +156,4 @@ if __name__ == '__main__':
         with open(cache_filename, 'rb') as f:
             people_pages = pickle.load(f)
     print(f"Dis Pages: {len(dis_pages)}")
-    retrieve_images(people_pages, wikipedia, output_location=cat_output_directory)
+    retrieve_images(people_pages, output_location=cat_output_directory)
