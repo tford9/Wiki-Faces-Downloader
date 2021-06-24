@@ -113,7 +113,7 @@ if __name__ == '__main__':
 
 
     print('Getting Extended Categories...')
-    max_depth = 25
+    max_depth = 2
     cache_filename = f'{cat_output_directory}cached_{args.categories[0]}.pkl'
     if not verify_file(cache_filename):
         pbar = tqdm(total=max_depth, desc="Descent")
