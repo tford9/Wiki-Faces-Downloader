@@ -87,7 +87,7 @@ if __name__ == '__main__':
                 sleep(10 * attempts)
         if failed:
             print(f'ReadTimeout caused failure to retrieve after repeated timeouts. For Subcat {category}')
-            return (set(), category)
+            return set(), category
         return data
 
 
