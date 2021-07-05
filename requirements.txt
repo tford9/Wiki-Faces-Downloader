@@ -1,0 +1,7 @@
+requests
+numpy
+tqdm
+pillow
+setuptools
+facenet-pytorch
+pymediawiki
