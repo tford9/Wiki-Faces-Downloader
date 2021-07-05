@@ -1,4 +1,4 @@
-# Wikipedia_Faces
+# Wiki Faces Downloader
 
 This project downloads images from a Wiki that include human faces. Specifically, images that are associated with
 certain wikipedia categories. The process is carried out as follows:
