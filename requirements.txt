@@ -1,3 +1,7 @@
-ipython==7.24.1
-pymediawiki==0.7.0
-tqdm==4.61.1
+requests
+numpy
+tqdm
+pillow
+setuptools
+facenet-pytorch
+pymediawiki
