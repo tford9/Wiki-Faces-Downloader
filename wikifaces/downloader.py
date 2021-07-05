@@ -2,21 +2,21 @@ import os
 import pickle
 import urllib
 from argparse import ArgumentParser as ArgP
+from io import BytesIO
 from time import sleep
 from typing import Dict, Set
 from urllib.parse import urlparse
 
+import numpy as np
 import requests
+from PIL import Image
+# face detction package
+from facenet_pytorch import MTCNN
 from mediawiki import MediaWiki, MediaWikiPage
 from tqdm import tqdm
 
 from utilities import Person, verify_dir, verify_file
 
-from PIL import Image
-from io import BytesIO
-import numpy as np
-# face detction package
-from facenet_pytorch import MTCNN
 
 def crop(image, bbox, margin=20, square=False, dy_margin=False):
     """Crop the image given bounding box.
