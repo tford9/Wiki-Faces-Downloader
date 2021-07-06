@@ -1,5 +1,5 @@
 # Wiki Faces Downloader
-
+[![License: MIT License](https://img.shields.io/badge/MITLicense-MIT%20License-red)](https://mit-license.org/)
 <figure>
   <img src="./Joko_Widodo_Wiki.png" style="width:100%">
   <figcaption>Figure 1: Joko Widodo's Wikipedia page, which includes am image of his face. The cropped image on the right is download into a directory named "Joko_Widodo."</figcaption>
@@ -27,6 +27,14 @@ The process is carried out as follows:
 <img src="https://img.shields.io/badge/python%20-%2314354C.svg?&style=for-the-badge&logo=python&logoColor=white"/> <img src="https://img.shields.io/badge/PyTorch%20-%23EE4C2C.svg?&style=for-the-badge&logo=PyTorch&logoColor=white" />
 
 Pip Installation Procedure:
+
+#### From TestPyPI:
+
+```
+pip install -i https://test.pypi.org/simple/ wikifaces-tford5
+```
+
+#### From Repo:
 
 ```
 git clone git@github.com:tford9/Wiki-Faces-Downloader.git
