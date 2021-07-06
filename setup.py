@@ -12,7 +12,7 @@ setup(
     url='https://github.com/tford9/Wiki-Faces-Downloader',
     author='Trenton W. Ford & Ruiting Shao',
     author_email='tford5@nd.edu',
-    license='BSD 2-clause',
+    license='MIT License',
     packages=['wikifaces'],
     install_requires=['facenet-pytorch',
                       'ipython',
@@ -22,12 +22,10 @@ setup(
                       ],
 
     classifiers=[
-        'Development Status :: 1 - Planning',
+        'Development Status :: 4 - Beta',
         'Intended Audience :: Science/Research',
-        'License :: OSI Approved :: BSD License',
+        'License :: OSI Approved :: MIT License',
         'Operating System :: POSIX :: Linux',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.4',
-        'Programming Language :: Python :: 3.5',
     ],
 )
