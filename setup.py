@@ -4,7 +4,7 @@ with open('README.md', 'r') as f:
     long_description = f.read()
 
 setup(
-    name='wikifaces',
+    name='wikifaces-tford5',
     version='0.1.0',
     description='A downloader for named images containing faces from Wiki servers.',
     long_description=long_description,
