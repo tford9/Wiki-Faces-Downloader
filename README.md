@@ -1,7 +1,8 @@
-# Wiki Faces Downloader
-[![License: MIT License](https://img.shields.io/badge/MITLicense-MIT%20License-red)](https://mit-license.org/)
+# Wiki Faces:
+
+[![License: MIT License](https://img.shields.io/badge/License%3A-MIT%20License-red)](https://mit-license.org/)
 <figure>
-  <img src="./Joko_Widodo_Wiki.png" style="width:100%">
+  <img src="https://github.com/tford9/Wiki-Faces-Downloader/blob/main/Joko_Widodo_Wiki.png" style="width:100%">
   <figcaption>Figure 1: Joko Widodo's Wikipedia page, which includes am image of his face. The cropped image on the right is download into a directory named "Joko_Widodo."</figcaption>
 </figure>
 
