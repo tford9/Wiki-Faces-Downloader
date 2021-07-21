@@ -11,6 +11,42 @@
 This project downloads images from a Wiki that include human faces. Specifically, images that are associated with
 certain wikipedia categories.
 
+## Installation
+
+<img src="https://img.shields.io/badge/python%20-%2314354C.svg?&style=for-the-badge&logo=python&logoColor=white"/> <img src="https://img.shields.io/badge/PyTorch%20-%23EE4C2C.svg?&style=for-the-badge&logo=PyTorch&logoColor=white" />
+
+Pip Installation Procedure:
+
+#### From TestPyPI:
+
+```commandline
+pip install -i https://test.pypi.org/simple/ wikifaces-tford5
+```
+
+#### From Repo:
+
+```commandline
+git clone git@github.com:tford9/Wiki-Faces-Downloader.git
+cd Wiki-Faces-Downloader
+python setup.py
+pip install wikifaces
+```
+
+## Usage
+
+#### Command-Line Example
+
+```commandline
+python downloader -i "indonesian engineers" -o ../data/ -d
+```
+
+#### Package Example
+
+```python
+import wikifaces
+
+```
+
 The process is carried out as follows:
 
 1. Given a category from a Wiki, collect *n* pages that contain the same category as well as at least one category
@@ -22,27 +58,6 @@ The process is carried out as follows:
 4. We capture all images from the wiki that contain the name of the page (if it's a person then the filename contains
    their name),
 5. Using the captured name and images, we create a dataset for that face.
-
-## Installation
-
-<img src="https://img.shields.io/badge/python%20-%2314354C.svg?&style=for-the-badge&logo=python&logoColor=white"/> <img src="https://img.shields.io/badge/PyTorch%20-%23EE4C2C.svg?&style=for-the-badge&logo=PyTorch&logoColor=white" />
-
-Pip Installation Procedure:
-
-#### From TestPyPI:
-
-```
-pip install -i https://test.pypi.org/simple/ wikifaces-tford5
-```
-
-#### From Repo:
-
-```
-git clone git@github.com:tford9/Wiki-Faces-Downloader.git
-cd Wiki-Faces-Downloader
-python setup.py
-pip install wikifaces
-```
 
 TODOs:
 
