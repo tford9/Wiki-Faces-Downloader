@@ -174,11 +174,27 @@ class WikiFace:
             return set(), category
         return data
 
-    def download(self, categories, output_location='../data/', doFace_detection=True, depth=1):
+    def download(self, categories, output_location='./data/', doFace_detection=True, depth=1):
         initial_categories = set(categories)
+        if len(initial_categories) == 0:
+
+            return 0
         first_cat = categories[0].replace(' ', '_')
         print('Collecting Initial Categories...')
-        categories = self.wikidata.categorytree(list(initial_categories), depth=1)
+        category_tree = self.wikidata.categorytree(list(initial_categories), depth=1)
+
+        def category_tree_count(cat_tree):
+            if not isinstance(cat_tree, dict):
+                return cat_tree
+            current_category = list(cat_tree.keys())[0]
+            if len(cat_tree[current_category]['sub-categories']) == 0:
+                return current_category
+            else:
+                mapped_results = map(category_tree_count, cat_tree[current_category]['sub-categories'])
+                return current_category + list(mapped_results)
+
+        category_tree_count(category_tree)
+
         print(f'Initial Categories Collected: {len(categories)}')
         people_pages = {}
 
@@ -187,8 +203,8 @@ class WikiFace:
 
         print('Getting Extended Categories...')
 
-        max_depth = 2
-        cache_filename = f'{cat_output_directory}cached_{first_cat}.pkl'
+        max_depth = depth
+        cache_filename = f'{cat_output_directory}cached_pages.pkl'
         if not verify_file(cache_filename):
             self.descent_pbar = tqdm(total=max_depth, desc="Descent")
             self.ascent_pbar = tqdm(total=max_depth, desc="Ascent")
