@@ -16,7 +16,7 @@ from facenet_pytorch import MTCNN
 from mediawiki import MediaWiki, MediaWikiPage
 from tqdm import tqdm
 
-from utilities import Person, verify_dir, verify_file
+from wikifaces.utilities import Person, verify_dir, verify_file
 
 
 def crop(image, bbox, margin=20, square=False, dy_margin=False):
@@ -46,33 +46,36 @@ def crop(image, bbox, margin=20, square=False, dy_margin=False):
 
 
 class WikiFace:
+    wikidata = None
     output_location: Union[str, pathlib.Path] = None
     ascent_pbar: tqdm = None
     descent_pbar: tqdm = None
-    wikidata = None
+    mtcnn = None
 
     def __init__(self):
-        self.wikidata = MediaWiki(rate_limit=False)
+        # create wiki object - defaults to Wikipedia.org
+        self.wikidata = MediaWiki(rate_limit=False,
+                                  user_agent='Wikifaces-Downloader/1.1 (https://trentonford.com/; tford5@nd.edu) pyMediaWiki/0.70')
 
     def retrieve_images(self, page_names: Dict, output_location='./data/wiki/', doFace_detection=False):
         skipped_downloads = 0
         failed_downloads = 0
         keep_characters = (' ', '.', '_')
 
-        # get the face detection model
-        # device = 'cuda:1'
-        mtcnn = MTCNN(image_size=256, margin=20, keep_all=True)
+        if self.mtcnn is None:
+            self.mtcnn = MTCNN(image_size=256, margin=20, keep_all=True)
 
-        def face_detect(image: Image, file_path, thredshold=0.8):
-            face_locations, probs, landmarks = mtcnn.detect(image, landmarks=True)
+        def face_detect(image: Image, file_path, threshold=0.8):
+            face_locations, probs, landmarks = self.mtcnn.detect(image, landmarks=True)
             face_list = []
 
             if face_locations is None or len(face_locations) == 0:
                 print("   Fail to find face in %s" % (file_path))
             else:
+
                 # iterate all the faces
                 for idx, location in enumerate(face_locations):
-                    if probs[idx] < thredshold:
+                    if probs[idx] < threshold:
                         continue
                     left, top, right, bottom = location
                     bbox = np.array([left, top, right, bottom])
@@ -107,6 +110,7 @@ class WikiFace:
                         person.add_image_location(l, output_location)
                     else:
                         # convert the binary data into an image
+                        img: Image = None
                         try:
                             img = Image.open(BytesIO(r.content)).convert("RGB")
                         except Exception as e:
@@ -178,16 +182,16 @@ class WikiFace:
         print(f'Initial Categories Collected: {len(categories)}')
         people_pages = {}
 
-        cat_output_directory = args.output_location + '/' + first_cat + '/'
+        cat_output_directory = output_location + '/' + first_cat + '/'
         verify_dir(cat_output_directory)
 
         print('Getting Extended Categories...')
 
         max_depth = 2
-        cache_filename = f'{cat_output_directory}cached_{args.categories[0]}.pkl'
+        cache_filename = f'{cat_output_directory}cached_{first_cat}.pkl'
         if not verify_file(cache_filename):
-            pbar = tqdm(total=max_depth, desc="Descent")
-            pbar2 = tqdm(total=max_depth, desc="Ascent")
+            self.descent_pbar = tqdm(total=max_depth, desc="Descent")
+            self.ascent_pbar = tqdm(total=max_depth, desc="Ascent")
             pages = self.get_pages(initial_categories, max_depth=max_depth)
             with open(cache_filename, 'wb') as f:
                 pickle.dump(pages, file=f)
@@ -227,7 +231,6 @@ class WikiFace:
                 people_pages = pickle.load(f)
         print(f"Dis Pages: {len(dis_pages)}")
 
-        doFace_detection = args.doFace_detection
         print(f"We are doing face detect: {doFace_detection}")
         self.retrieve_images(people_pages, output_location=cat_output_directory, doFace_detection=doFace_detection)
 

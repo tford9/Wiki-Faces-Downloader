@@ -5,3 +5,4 @@ pillow
 setuptools
 facenet-pytorch
 pymediawiki
+twine
