@@ -51,13 +51,16 @@ class WikiFace:
     ascent_pbar: tqdm = None
     descent_pbar: tqdm = None
     mtcnn = None
+    user_agent = "Wikifaces-Downloader/1.1 (https://trentonford.com/; tford5@nd.edu) pyMediaWiki/0.70"
+    user_agent_dict = {"User-Agent": user_agent}
 
     def __init__(self):
         # create wiki object - defaults to Wikipedia.org
         self.wikidata = MediaWiki(rate_limit=False,
-                                  user_agent='Wikifaces-Downloader/1.1 (https://trentonford.com/; tford5@nd.edu) pyMediaWiki/0.70')
+                                  user_agent=self.user_agent)
 
-    def retrieve_images(self, page_names: Dict, output_location='./data/wiki/', doFace_detection=False):
+    def retrieve_images(self, page_names: Dict, output_location: Union[str, os.path] = './data/wiki/',
+                        detect_faces: bool = False):
         skipped_downloads = 0
         failed_downloads = 0
         keep_characters = (' ', '.', '_')
@@ -65,14 +68,13 @@ class WikiFace:
         if self.mtcnn is None:
             self.mtcnn = MTCNN(image_size=256, margin=20, keep_all=True)
 
-        def face_detect(image: Image, file_path, threshold=0.8):
+        def face_detect(image: Image, file_path: Union[str, os.path], threshold: float = 0.8):
             face_locations, probs, landmarks = self.mtcnn.detect(image, landmarks=True)
             face_list = []
 
             if face_locations is None or len(face_locations) == 0:
-                print("   Fail to find face in %s" % (file_path))
+                print(f'No faces found in {file_path}')
             else:
-
                 # iterate all the faces
                 for idx, location in enumerate(face_locations):
                     if probs[idx] < threshold:
@@ -88,11 +90,19 @@ class WikiFace:
             folder_name = key.lower().replace(' ', '_')
             output_path = f'{output_location}/{folder_name}/'
             verify_dir(output_path)
+            image_extensions = ['.jpg', '.png', '.gif']
 
             for idx, l in enumerate(person.image_links):
                 # get filename
                 _parsed = urlparse(l)
                 _filename = os.path.basename(_parsed.path)
+
+                # make sure link points to image
+                _filename_, _file_extension = os.path.splitext(_filename)
+                if _file_extension not in image_extensions:
+                    print(_file_extension)
+                    continue
+
                 # filename = filename.split('.')[0]
                 _filename = urllib.parse.unquote(_filename)
                 _filename = "".join(c for c in _filename if c.isalnum() or c in keep_characters).rstrip()
@@ -101,8 +111,8 @@ class WikiFace:
                     skipped_downloads += 1
                     break
                 try:
-                    r = requests.get(l)
-                    if not doFace_detection:
+                    r = requests.get(l, headers=self.user_agent_dict)
+                    if not detect_faces:
                         # the output images may not actually be jpgs
                         output_filename = os.path.abspath(f'{output_path}/{_filename}')
                         with open(output_filename, 'wb') as f:
@@ -114,17 +124,17 @@ class WikiFace:
                         try:
                             img = Image.open(BytesIO(r.content)).convert("RGB")
                         except Exception as e:
-                            print(f"    Cannot identify image file {l}")
-
-                        faces = face_detect(img, l)
+                            print(f"Cannot identify image file {l}")
+                        try:
+                            faces = face_detect(img, l)
+                        except Exception as e:
+                            print(r)
+                            print(e)
                         if not len(faces):
                             continue
-                        ext_idx = _filename.rfind(".")
-                        _filename_ = _filename[:ext_idx]
-                        _ext_ = _filename[ext_idx:]
                         for idx, face in enumerate(faces):
                             # _filename, _ext = os.path.splitext(_filename)
-                            output_filename = os.path.abspath(f'{output_path}/{_filename_}-p{idx}.jpg')
+                            output_filename = os.path.abspath(f'{output_path}/{_filename_}-p{idx}{_file_extension}')
                             face.save(output_filename)
                         person.add_image_location(l, output_location)
 
@@ -167,44 +177,45 @@ class WikiFace:
             except Exception as e:
                 failed = True
                 data = None
-                print(f'ReadTimeout')
+                print(f'Backoff Timeout {10 * attempts} Seconds...')
                 sleep(10 * attempts)
         if failed:
-            print(f'ReadTimeout caused failure to retrieve after repeated timeouts. For Subcat {category}')
+            print(f'ReadTimeout caused failure to retrieve after repeated timeouts. For Subcategory {category}')
             return set(), category
         return data
 
     def download(self, categories, output_location='./data/', doFace_detection=True, depth=1):
         initial_categories = set(categories)
         if len(initial_categories) == 0:
-
             return 0
         first_cat = categories[0].replace(' ', '_')
         print('Collecting Initial Categories...')
-        category_tree = self.wikidata.categorytree(list(initial_categories), depth=1)
+        # category_tree = self.wikidata.categorytree(list(initial_categories), depth=1)
+        #
+        # def category_tree_reduce(cat_tree):
+        #     if not isinstance(cat_tree, dict):
+        #         return cat_tree
+        #     current_category = list(cat_tree.keys())[0]
+        #     if len(cat_tree[current_category]['sub-categories']) == 0:
+        #         return current_category
+        #     else:
+        #         mapped_results = []
+        #         for cat in cat_tree[current_category]['sub-categories']:
+        #             mapped_results.append(category_tree_reduce(cat_tree[current_category]['sub-categories']))
+        #
+        #         return [current_category] + list(mapped_results)
+        #
+        # categories_list = category_tree_reduce(category_tree)
 
-        def category_tree_count(cat_tree):
-            if not isinstance(cat_tree, dict):
-                return cat_tree
-            current_category = list(cat_tree.keys())[0]
-            if len(cat_tree[current_category]['sub-categories']) == 0:
-                return current_category
-            else:
-                mapped_results = map(category_tree_count, cat_tree[current_category]['sub-categories'])
-                return current_category + list(mapped_results)
-
-        category_tree_count(category_tree)
-
-        print(f'Initial Categories Collected: {len(categories)}')
-        people_pages = {}
+        # print(f'Initial Categories Collected: {len(categories_list)}')
 
         cat_output_directory = output_location + '/' + first_cat + '/'
         verify_dir(cat_output_directory)
 
-        print('Getting Extended Categories...')
+        print('Getting Extended Categories and Page Names...')
 
         max_depth = depth
-        cache_filename = f'{cat_output_directory}cached_pages.pkl'
+        cache_filename = f'{cat_output_directory}cached_pages_d{depth}.pkl'
         if not verify_file(cache_filename):
             self.descent_pbar = tqdm(total=max_depth, desc="Descent")
             self.ascent_pbar = tqdm(total=max_depth, desc="Ascent")
@@ -215,7 +226,10 @@ class WikiFace:
             with open(cache_filename, 'rb') as f:
                 pages = pickle.load(f)
 
-        cache_filename = f'{cat_output_directory}/cached_{len(initial_categories)}_dis_pages.pkl'
+        print(f'Downloading People Pages...')
+
+        cache_filename = f'{cat_output_directory}/cached_{len(initial_categories)}_people_pages_d{depth}.pkl'
+        people_pages = {}
         dis_pages = []
         if not verify_file(cache_filename):
             print(f'Number of Pages Collected: {len(pages)}')
@@ -241,14 +255,14 @@ class WikiFace:
                                     people_pages[p].add_image_links(img_link)
             with open(cache_filename, 'wb') as f:
                 pickle.dump(people_pages, file=f)
-            print("Pages ignored: ", nonperson_pages)
+            print("None-person pages ignored: ", nonperson_pages)
         else:
             with open(cache_filename, 'rb') as f:
                 people_pages = pickle.load(f)
-        print(f"Dis Pages: {len(dis_pages)}")
+        print(f"People Pages: {len(people_pages)}")
 
         print(f"We are doing face detect: {doFace_detection}")
-        self.retrieve_images(people_pages, output_location=cat_output_directory, doFace_detection=doFace_detection)
+        self.retrieve_images(people_pages, output_location=cat_output_directory, detect_faces=doFace_detection)
 
 
 if __name__ == '__main__':
@@ -258,7 +272,7 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output', dest='output_location',
                         help='Location where output will be saved')
     parser.add_argument('-d', '--depth', dest='depth', help='How far from the initial categories to download images.')
-    parser.add_argument('-f', '--face-detection', dest='doFace_detection', action='store_true',
+    parser.add_argument('-f', '--face-detection', dest='detect_faces', action='store_true',
                         help='enable do face detection during the image downloading')
     args = parser.parse_args()
 
