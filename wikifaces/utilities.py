@@ -2,15 +2,17 @@ import os
 
 
 class Person:
-    # name = None
-    # page_url = None
-    # image_links = list()
-    # image_locations = dict()
+    name = None
+    page_url = None
+    image_links = None
+    images = None
+    image_locations = None
 
     def __init__(self, name):
         self.name = name
         self.image_links = list()
         self.image_locations = dict()
+        self.images = dict()
         self.page_url = None
 
     def __str__(self):
@@ -28,6 +30,14 @@ class Person:
 
     def add_image_location(self, image_link, image_location):
         self.image_locations[image_link] = image_location
+
+    def add_image(self, image_link, image):
+        self.images[image_link] = image
+
+    def remove_image(self, image_link):
+        self.image_locations.pop(image_link, None)
+        self.images.pop(image_link, None)
+        self.image_links.remove(image_link)
 
     def set_page_url(self, url):
         if self.page_url is None:

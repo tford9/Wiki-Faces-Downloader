@@ -63,4 +63,4 @@ TODOs:
 
 1. Currently, a part of this process uses a recursive call structure to get all related pages; there may be a way to
    linearize, or parallelize this.
-2. Face detection could reduce the image footprint by removing spurious image collection.
+2. Best match image voting for face images within a single person's name.

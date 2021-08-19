@@ -6,3 +6,7 @@ setuptools
 facenet-pytorch
 pymediawiki
 twine
+insightface
+opencv-python
+mxnet
+onnxruntime

@@ -5,18 +5,24 @@ import urllib
 from argparse import ArgumentParser as ArgP
 from io import BytesIO
 from time import sleep
-from typing import Dict, Set, Union
+from typing import Any, Dict, List, Set, Union
 from urllib.parse import urlparse
 
+import cv2
+import insightface
 import numpy as np
 import requests
 from PIL import Image
-# face detction package
 from facenet_pytorch import MTCNN
 from mediawiki import MediaWiki, MediaWikiPage
+from sklearn.cluster import DBSCAN
 from tqdm import tqdm
 
 from wikifaces.utilities import Person, verify_dir, verify_file
+
+
+def pil_to_cv2(img):
+    return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
 
 
 def crop(image, bbox, margin=20, square=False, dy_margin=False):
@@ -46,21 +52,59 @@ def crop(image, bbox, margin=20, square=False, dy_margin=False):
 
 
 class WikiFace:
+    user_agent = "Wikifaces-Downloader/1.1 (https://trentonford.com/; tford5@nd.edu) pyMediaWiki/0.70"
+    user_agent_dict = {"User-Agent": user_agent}
+
     wikidata = None
     output_location: Union[str, pathlib.Path] = None
     ascent_pbar: tqdm = None
     descent_pbar: tqdm = None
     mtcnn = None
-    user_agent = "Wikifaces-Downloader/1.1 (https://trentonford.com/; tford5@nd.edu) pyMediaWiki/0.70"
-    user_agent_dict = {"User-Agent": user_agent}
+
+    face_detection_model = None
 
     def __init__(self):
         # create wiki object - defaults to Wikipedia.org
         self.wikidata = MediaWiki(rate_limit=False,
                                   user_agent=self.user_agent)
 
-    def retrieve_images(self, page_names: Dict, output_location: Union[str, os.path] = './data/wiki/',
-                        detect_faces: bool = False):
+    def face_match(self, person: Person, match_threshold: int = 0.9) -> Person:
+        if len(person.images) > 2:
+            # if face detection object not loaded
+            if self.face_detection_model is None:
+                self.face_detection_model = insightface.app.FaceAnalysis()
+                self.face_detection_model.prepare(ctx_id=-1)
+
+            # given a list of face images, choose the
+            cv2_faces = {}
+            for key, face in person.images.items():
+                f = pil_to_cv2(face)
+                cv2_faces[key] = f
+
+            face_vectors = {}
+
+            for key, face in cv2_faces.items():
+                face_object: List = self.face_detection_model.get(face)
+                for f in face_object:
+                    face_vectors[key] = f.normed_embedding
+
+            X = list()
+            Y = list()
+            [(X.append(x), Y.append(y)) for y, x in face_vectors.items()]
+
+            db: DBSCAN = DBSCAN(eps=0.5, min_samples=1).fit(X)
+            print(db.labels_)
+            cluster_sizes = np.bincount(db.labels_)
+            largest_cluster = (np.argmax(cluster_sizes))
+
+            for idx, cluster_id in enumerate(db.labels_):
+                if cluster_id != largest_cluster:
+                    person.remove_image(Y[idx])
+
+        return person
+
+    def retrieve_images(self, page_names: Dict, output_location: Union[str, Any] = './data/wiki/',
+                        detect_faces: bool = False, best_match: bool = True):
         skipped_downloads = 0
         failed_downloads = 0
         keep_characters = (' ', '.', '_')
@@ -68,7 +112,7 @@ class WikiFace:
         if self.mtcnn is None:
             self.mtcnn = MTCNN(image_size=256, margin=20, keep_all=True)
 
-        def face_detect(image: Image, file_path: Union[str, os.path], threshold: float = 0.8):
+        def face_detect(image: Image, file_path: str, threshold: float = 0.8):
             face_locations, probs, landmarks = self.mtcnn.detect(image, landmarks=True)
             face_list = []
 
@@ -117,7 +161,7 @@ class WikiFace:
                         output_filename = os.path.abspath(f'{output_path}/{_filename}')
                         with open(output_filename, 'wb') as f:
                             f.write(r.content)
-                        person.add_image_location(l, output_location)
+                        person.add_image_location(l, output_filename)
                     else:
                         # convert the binary data into an image
                         img: Image = None
@@ -130,17 +174,28 @@ class WikiFace:
                         except Exception as e:
                             print(r)
                             print(e)
+                        # if there are no faces, don't attempt to write to disk.
                         if not len(faces):
                             continue
-                        for idx, face in enumerate(faces):
-                            # _filename, _ext = os.path.splitext(_filename)
-                            output_filename = os.path.abspath(f'{output_path}/{_filename_}-p{idx}{_file_extension}')
-                            face.save(output_filename)
-                        person.add_image_location(l, output_location)
+                        # if we're not doing a best face match, then write images to disk. Otherwise, hold onto them.
+                        for _idx, face in enumerate(faces):
+                            output_filename = os.path.abspath(f'{output_path}/{_filename_}-p{_idx}{_file_extension}')
+                            person.add_image_location(l, output_filename)
+                            person.add_image(l, face)
 
                 except ConnectionError as e:
                     failed_downloads += 1
                     continue
+
+            # if best match voting is on, reduce faces list
+            if best_match:
+                person = self.face_match(person)
+
+            for key, value in person.images.items():
+                # _filename, _ext = os.path.splitext(_filename)
+                output_filename = person.image_locations[key]
+                value.save(output_filename)
+
         print(f'Skipped Downloads: {skipped_downloads}')
         print(f'Failed Downloads: {failed_downloads}')
         return page_names
@@ -184,36 +239,17 @@ class WikiFace:
             return set(), category
         return data
 
-    def download(self, categories, output_location='./data/', doFace_detection=True, depth=1):
+    def download(self, categories, output_location='./data/', depth=1, detect_faces=True, face_match: bool = True):
         initial_categories = set(categories)
         if len(initial_categories) == 0:
             return 0
         first_cat = categories[0].replace(' ', '_')
+
         print('Collecting Initial Categories...')
-        # category_tree = self.wikidata.categorytree(list(initial_categories), depth=1)
-        #
-        # def category_tree_reduce(cat_tree):
-        #     if not isinstance(cat_tree, dict):
-        #         return cat_tree
-        #     current_category = list(cat_tree.keys())[0]
-        #     if len(cat_tree[current_category]['sub-categories']) == 0:
-        #         return current_category
-        #     else:
-        #         mapped_results = []
-        #         for cat in cat_tree[current_category]['sub-categories']:
-        #             mapped_results.append(category_tree_reduce(cat_tree[current_category]['sub-categories']))
-        #
-        #         return [current_category] + list(mapped_results)
-        #
-        # categories_list = category_tree_reduce(category_tree)
-
-        # print(f'Initial Categories Collected: {len(categories_list)}')
-
         cat_output_directory = output_location + '/' + first_cat + '/'
         verify_dir(cat_output_directory)
 
         print('Getting Extended Categories and Page Names...')
-
         max_depth = depth
         cache_filename = f'{cat_output_directory}cached_pages_d{depth}.pkl'
         if not verify_file(cache_filename):
@@ -227,7 +263,6 @@ class WikiFace:
                 pages = pickle.load(f)
 
         print(f'Downloading People Pages...')
-
         cache_filename = f'{cat_output_directory}/cached_{len(initial_categories)}_people_pages_d{depth}.pkl'
         people_pages = {}
         dis_pages = []
@@ -261,8 +296,8 @@ class WikiFace:
                 people_pages = pickle.load(f)
         print(f"People Pages: {len(people_pages)}")
 
-        print(f"We are doing face detect: {doFace_detection}")
-        self.retrieve_images(people_pages, output_location=cat_output_directory, detect_faces=doFace_detection)
+        print(f"We are doing face detect: {detect_faces}")
+        self.retrieve_images(people_pages, output_location=cat_output_directory, detect_faces=detect_faces)
 
 
 if __name__ == '__main__':
