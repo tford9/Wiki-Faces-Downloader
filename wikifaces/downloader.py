@@ -21,7 +21,7 @@ from wikifaces.utilities import Person, verify_dir, verify_file
 
 
 def pil_to_cv2(img):
-    return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+    return cv2.cvtColor(np.array(img.getdata(), dtype='uint8'), cv2.COLOR_RGB2BGR)
 
 
 def crop(image, bbox, margin=20, square=False, dy_margin=False):
@@ -74,16 +74,21 @@ class WikiFace:
         if not detect_faces:
             return mod_person
 
+        # if face detection object not loaded
+        if self.face_detection_model is None:
+            self.face_detection_model = FaceAnalysis()
+            self.face_detection_model.prepare(ctx_id=0)
+
         image_to_face_lookup = dict()
         faces_found = 0
 
         for image_filename, image in mod_person.images.items():
-            # if face detection object not loaded
-            if self.face_detection_model is None:
-                self.face_detection_model = FaceAnalysis()
-                self.face_detection_model.prepare(ctx_id=0)
 
-            cv2_img = pil_to_cv2(image)
+            try:
+                cv2_img = pil_to_cv2(image)
+            except Exception as e:
+                print(f"pil_to_cv2 failed on image: {image_filename} with image data:{image}")
+                continue
 
             image_to_face_lookup[image_filename] = list()
 
@@ -198,7 +203,10 @@ class WikiFace:
             for key, value in person.face_images.items():
                 # _filename, _ext = os.path.splitext(_filename)
                 output_filename = person.face_image_locations[key]
-                cv2.imwrite(output_filename, value)
+                try:
+                    cv2.imwrite(output_filename, value)
+                except Exception as e:
+                    print(f'imwrite failed on file {output_filename} with key: {key}\n Error {e}')
 
         print(f'Skipped Downloads: {skipped_downloads}')
         print(f'Failed Downloads: {failed_downloads}')
