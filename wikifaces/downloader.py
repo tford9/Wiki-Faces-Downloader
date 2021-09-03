@@ -1,6 +1,8 @@
+import copy
 import os
 import pathlib
 import pickle
+import re
 import urllib
 from argparse import ArgumentParser as ArgP
 from io import BytesIO
@@ -13,7 +15,6 @@ import numpy as np
 import requests
 from PIL import Image
 from facenet_pytorch import MTCNN
-from insightface.app import FaceAnalysis
 from mediawiki import MediaWiki, MediaWikiPage
 from tqdm import tqdm
 
@@ -21,7 +22,7 @@ from wikifaces.utilities import Person, verify_dir, verify_file
 
 
 def pil_to_cv2(img):
-    return cv2.cvtColor(np.array(img.getdata(), dtype='uint8'), cv2.COLOR_RGB2BGR)
+    return cv2.cvtColor(np.array(img, dtype='uint8'), cv2.COLOR_RGB2BGR)
 
 
 def crop(image, bbox, margin=20, square=False, dy_margin=False):
@@ -59,6 +60,9 @@ class WikiFace:
     ascent_pbar: tqdm = None
     descent_pbar: tqdm = None
     mtcnn = None
+    images_processed = 0
+    reinitialize_model_thresh = 100
+    count = 0
 
     face_detection_model = None
 
@@ -66,6 +70,7 @@ class WikiFace:
         # create wiki object - defaults to Wikipedia.org
         self.wikidata = MediaWiki(rate_limit=False,
                                   user_agent=self.user_agent)
+        self.mtcnn = MTCNN(image_size=256, margin=20, keep_all=True)
 
     def face_match(self, person: Person, detect_faces: bool = True, face_match: bool = True,
                    match_threshold: float = 0.5) -> Person:
@@ -73,11 +78,13 @@ class WikiFace:
         mod_person = person
         if not detect_faces:
             return mod_person
+        self.images_processed += 1
 
         # if face detection object not loaded
-        if self.face_detection_model is None:
-            self.face_detection_model = FaceAnalysis()
-            self.face_detection_model.prepare(ctx_id=0)
+        # if self.face_detection_model is None or self.count > self.reinitialize_model_thresh:
+        #     self.count = 0
+        #     self.face_detection_model = FaceAnalysis()
+        #     self.face_detection_model.prepare(ctx_id=0)
 
         image_to_face_lookup = dict()
         faces_found = 0
@@ -86,6 +93,8 @@ class WikiFace:
 
             try:
                 cv2_img = pil_to_cv2(image)
+                if len(cv2_img) == 0:
+                    raise Exception
             except Exception as e:
                 print(f"pil_to_cv2 failed on image: {image_filename} with image data:{image}")
                 continue
@@ -94,7 +103,8 @@ class WikiFace:
 
             face_locations, probs, landmarks = self.mtcnn.detect(image, landmarks=True)
             if face_locations is None or len(face_locations) == 0:
-                print(f'No faces found in {image_filename}')
+                # print(f'No faces found in {image_filename}')
+                pass
             else:
                 # iterate all the faces
                 if len(face_locations) == 1:
@@ -105,38 +115,16 @@ class WikiFace:
                         left, top, right, bottom = location
                         bbox = np.array([left, top, right, bottom])
                         face = crop(cv2_img, bbox)
+                        if face.size == 0:
+                            continue
                         mod_person.add_face_images(faces_found, face)
                         output_filename = os.path.abspath(f'{image_filename}-p{faces_found}.jpg')
                         mod_person.add_face_location(faces_found, output_filename)
                         image_to_face_lookup[image_filename].append(faces_found)
                         faces_found += 1
 
-        if not face_match:
-            return mod_person
-        # image_to_face_lookup = dict(sorted(image_to_face_lookup.items(), key=lambda item: len(item[1])))
-
-        # for img_fn in image_to_face_lookup.keys():
-        #     if len(image_to_face_lookup[img_fn]) == 1:
-
-        # if len(mod_person.face_images) > 2:
-        #     # faces_object_list: List = self.face_detection_model.get(cv2_img)
-        #     face_vectors = {}
-        #     for key, face_image in mod_person.face_images.items():
-        #         face_object: List = self.face_detection_model.get(face_image)
-        #         if face_object:
-        #             face_vectors[key] = face_object[0].normed_embedding
-        #
-        #     X = list()
-        #     Y = list()
-        #     [(X.append(x), Y.append(y)) for y, x in face_vectors.items()]
-        #
-        #     db: DBSCAN = DBSCAN(eps=match_threshold, min_samples=1).fit(X)
-        #     cluster_sizes = np.bincount(db.labels_)
-        #     largest_cluster = (np.argmax(cluster_sizes))
-        #
-        #     for idx, cluster_id in enumerate(db.labels_):
-        #         if cluster_id != largest_cluster:
-        #             mod_person.remove_face_image(Y[idx])
+        # if not face_match:
+        #     return mod_person
         return mod_person
 
     def retrieve_images(self, page_names: Dict, output_location: Union[str, Any] = './data/wiki/',
@@ -146,16 +134,21 @@ class WikiFace:
         failed_downloads = 0
         keep_characters = (' ', '.', '_')
 
-        if self.mtcnn is None:
-            self.mtcnn = MTCNN(image_size=256, margin=20, keep_all=True)
-
         for key, person in tqdm(page_names.items(), desc='Processing Image Downloads'):
-            folder_name = key.lower().replace(' ', '_')
+            if self.mtcnn is None or self.count > self.reinitialize_model_thresh:
+                self.mtcnn = MTCNN(image_size=256, margin=20, keep_all=True)
+                self.count = 0
+
+            self.count += 1
+            self.images_processed += 1
+
+            _person = copy.deepcopy(person)
+            folder_name = '_'.join(re.findall('[\w\d\_]+', key.lower().replace(' ', '_')))
             output_path = f'{output_location}/{folder_name}/'
             verify_dir(output_path)
             image_extensions = ['.jpg', '.png', '.gif']
 
-            for idx, l in enumerate(person.image_links):
+            for idx, l in enumerate(_person.image_links):
                 # get filename
                 _parsed = urlparse(l)
                 _filename = os.path.basename(_parsed.path)
@@ -177,11 +170,11 @@ class WikiFace:
                     r = requests.get(l, headers=self.user_agent_dict)
                     output_filename = os.path.abspath(f'{output_path}/{_filename}')
 
-                    if not detect_faces or not face_consistency_checking:
+                    if not detect_faces and not face_consistency_checking:
                         # the output images may not actually be jpgs
                         with open(output_filename, 'wb') as f:
                             f.write(r.content)
-                        person.add_face_location(l, output_filename)
+                        _person.add_face_location(l, output_filename)
                     else:
                         # convert the binary data into an image
                         img: Image = None
@@ -189,28 +182,29 @@ class WikiFace:
                             img = Image.open(BytesIO(r.content)).convert("RGB")
                         except Exception as e:
                             print(f"Cannot identify image file {l}")
-                        person.add_image(output_filename, img)
+                        _person.add_image(output_filename, img)
 
                 except Exception as e:
                     print(f'Image Download Failed:{e}')
 
             # if best match voting is on, reduce faces list
-            person = self.face_match(person=person,
-                                     match_threshold=face_match_threshold,
-                                     detect_faces=detect_faces,
-                                     face_match=face_consistency_checking)
+            heavy_person = self.face_match(person=_person,
+                                           match_threshold=face_match_threshold,
+                                           detect_faces=detect_faces,
+                                           face_match=face_consistency_checking)
 
-            for key, value in person.face_images.items():
+            for key, value in heavy_person.face_images.items():
                 # _filename, _ext = os.path.splitext(_filename)
-                output_filename = person.face_image_locations[key]
+                output_filename = heavy_person.face_image_locations[key]
                 try:
                     cv2.imwrite(output_filename, value)
                 except Exception as e:
                     print(f'imwrite failed on file {output_filename} with key: {key}\n Error {e}')
-
+            del heavy_person
+            del _person
+            # del person
         print(f'Skipped Downloads: {skipped_downloads}')
         print(f'Failed Downloads: {failed_downloads}')
-        return page_names
 
     def get_pages(self, category, seen_categories=None, depth=0, max_depth=2) -> Set:
         if seen_categories is None:
@@ -328,4 +322,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     wikiface_obj = WikiFace()
-    wikiface_obj.download(args.categories, args.output_location, args.doFace_detection, args.depth)
+    # wikiface_obj.download(args.categories, args.output_location, args.doFace_detection, args.depth)
+    wikiface_obj.download(['indonesia'], depth=6, face_match_threshold=0.5)
