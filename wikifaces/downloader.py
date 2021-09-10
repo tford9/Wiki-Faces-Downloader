@@ -22,7 +22,7 @@ from wikifaces.utilities import Person, verify_dir, verify_file
 
 
 def pil_to_cv2(img):
-    return cv2.cvtColor(np.array(img, dtype='uint8'), cv2.COLOR_RGB2BGR)
+    return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
 
 
 def crop(image, bbox, margin=20, square=False, dy_margin=False):
@@ -49,6 +49,22 @@ def crop(image, bbox, margin=20, square=False, dy_margin=False):
     bbox[2] = min(bbox[2], w)
     bbox[3] = min(bbox[3], h)
     return image[bbox[1]:bbox[3], bbox[0]:bbox[2]]
+
+
+def ResizeWithAspectRatio(image, width=None, height=None, inter=cv2.INTER_AREA):
+    dim = None
+    (h, w) = image.shape[:2]
+
+    if width is None and height is None:
+        return image
+    if width is None:
+        r = height / float(h)
+        dim = (int(w * r), height)
+    else:
+        r = width / float(w)
+        dim = (width, int(h * r))
+
+    return cv2.resize(image, dim, interpolation=inter)
 
 
 class WikiFace:
@@ -101,7 +117,15 @@ class WikiFace:
 
             image_to_face_lookup[image_filename] = list()
 
-            face_locations, probs, landmarks = self.mtcnn.detect(image, landmarks=True)
+            # rescale if necessary
+            if cv2_img.shape[:2][0] > 1280 or cv2_img.shape[:2][1] > 1280:
+                cv2_img = ResizeWithAspectRatio(cv2_img, width=1280)
+
+            try:
+                face_locations, probs, landmarks = self.mtcnn.detect(cv2_img, landmarks=True)
+            except Exception as e:
+                return mod_person
+
             if face_locations is None or len(face_locations) == 0:
                 # print(f'No faces found in {image_filename}')
                 pass
@@ -133,8 +157,18 @@ class WikiFace:
         skipped_downloads = 0
         failed_downloads = 0
         keep_characters = (' ', '.', '_')
+        simp_idx = 1
 
         for key, person in tqdm(page_names.items(), desc='Processing Image Downloads'):
+            # print(person)
+            # continue
+            # if simp_idx >= 590:
+            #     print('here')
+            # print(person)
+            # else:
+            #     simp_idx +=1
+            #     continue
+
             if self.mtcnn is None or self.count > self.reinitialize_model_thresh:
                 self.mtcnn = MTCNN(image_size=256, margin=20, keep_all=True)
                 self.count = 0
@@ -197,6 +231,7 @@ class WikiFace:
                 # _filename, _ext = os.path.splitext(_filename)
                 output_filename = heavy_person.face_image_locations[key]
                 try:
+                    # print(output_filename)
                     cv2.imwrite(output_filename, value)
                 except Exception as e:
                     print(f'imwrite failed on file {output_filename} with key: {key}\n Error {e}')
