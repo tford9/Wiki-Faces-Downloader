@@ -1,5 +1,8 @@
 import os
 
+import cv2
+import numpy as np
+
 
 class Person:
     name = None
@@ -66,3 +69,56 @@ def verify_dir(path):
     """Given a path to a directory, create it if it does not exist"""
     if not os.path.exists(path):
         os.makedirs(path)
+
+
+def ResizeWithAspectRatio(image, width=None, height=None, inter=cv2.INTER_AREA):
+    dim = None
+    (h, w) = image.shape[:2]
+
+    if width is None and height is None:
+        return image
+    if width is None:
+        r = height / float(h)
+        dim = (int(w * r), height)
+    else:
+        r = width / float(w)
+        dim = (width, int(h * r))
+
+    return cv2.resize(image, dim, interpolation=inter)
+
+
+def crop(image, bbox, margin=20, square=False, dy_margin=False):
+    """Crop the image given bounding box.
+    Params:
+        image: a numpy array
+        bbox: a numpy array [left, top, right, bottom]
+        margin: <int> margin for cropping face
+    Return:
+        patch: a numpy array
+    """
+    h, w = image.shape[:2]
+    if dy_margin:
+        face_w, face_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        bbox[0], bbox[1], bbox[2], bbox[3] = bbox[0] - face_w / 2, bbox[1] - face_h / 2, bbox[2] + face_w / 2, bbox[
+            3] + face_h / 2
+    else:
+        bbox[0], bbox[1], bbox[2], bbox[3] = bbox[0] - margin, bbox[1] - margin, bbox[2] + margin, bbox[3] + margin
+    if square:
+        bbox[2] = max(bbox[2] - bbox[0], bbox[3] - bbox[1]) + bbox[0]
+        bbox[3] = max(bbox[2] - bbox[0], bbox[3] - bbox[1]) + bbox[1]
+    bbox = bbox.astype(int)
+    bbox[bbox < 0] = 0
+    bbox[2] = min(bbox[2], w)
+    bbox[3] = min(bbox[3], h)
+    return image[bbox[1]:bbox[3], bbox[0]:bbox[2]]
+
+
+def pil_to_cv2(img):
+    return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+
+
+def remove_empty_folders(path_abs):
+    walk = list(os.walk(path_abs))
+    for path, _, _ in walk[::-1]:
+        if len(os.listdir(path)) == 0:
+            os.remove(path)
