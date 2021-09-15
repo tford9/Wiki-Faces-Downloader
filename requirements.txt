@@ -2,7 +2,7 @@ requests
 numpy
 tqdm
 pillow
-setuptools
+setuptool
 facenet-pytorch
 pymediawiki
 twine

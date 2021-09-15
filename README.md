@@ -43,9 +43,23 @@ python downloader -i "indonesian engineers" -o ../data/ -d
 #### Package Example
 
 ```python
-import wikifaces
+from wikifaces.downlaoder import WikiFace
 
+wikiface_obj = WikiFace()
+wikiface_obj.download(categories=['facebook'], depth=2, output_location='../data/')
 ```
+
+The following structure is output:
+
+- `facebook`
+    - `cached_1_people_pages_d2.pkl`
+    - `cached_pages_d2.pkl`
+    - `alan_rushbridger`
+        - `Alan_Rusbridger_01.jpg-p0.jpg`
+    - `...`
+    - `mark_zuckerberg`
+        - `MarkZuckerbergcrop.jpg-p1.jpg`
+    - `...`
 
 The process is carried out as follows:
 
@@ -63,4 +77,6 @@ TODOs:
 
 1. Currently, a part of this process uses a recursive call structure to get all related pages; there may be a way to
    linearize, or parallelize this.
-2. Best match image voting for face images within a single person's name.
+2. Currently, we are only pulling images contain the person's name in the title and only have one visible face in the
+   image. All other images are not considered. A voting system should be added to get the most represented faces across
+   multiple images.

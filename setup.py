@@ -4,8 +4,8 @@ with open('README.md', 'r') as f:
     long_description = f.read()
 
 setup(
-    name='wikifaces-tford5',
-    version='0.1.1',
+    name='wikifaces',
+    version='1.0.2',
     description='A downloader for named images containing faces from Wiki servers.',
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -18,7 +18,12 @@ setup(
                       'ipython',
                       'pip-chill',
                       'pymediawiki',
-                      'tqdm'
+                      'tqdm',
+                      'numpy',
+                      'pillow',
+                      'insightface',
+                      'opencv-python',
+                      'mxnet',
                       ],
 
     classifiers=[
