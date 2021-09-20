@@ -17,10 +17,10 @@ certain wikipedia categories.
 
 Pip Installation Procedure:
 
-#### From TestPyPI:
+#### From PIP:
 
 ```commandline
-pip install -i https://test.pypi.org/simple/ wikifaces-tford5
+pip install wikifaces 
 ```
 
 #### From Repo:
