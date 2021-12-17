@@ -85,13 +85,16 @@ class WikiFace:
                 # print(f'No faces found in {image_filename}')
                 pass
             else:
-                # iterate all the faces
-                if len(face_locations) == 1:
-                    for idx, location in enumerate(face_locations):
-                        if probs[idx] < 0.95:
-                            continue
+                face_list = []
+                for idx, face in enumerate(face_locations):
+                    if probs[idx] > 0.95:
+                        face_list.append(idx)
 
-                        left, top, right, bottom = location
+                # iterate all the faces
+                for idx in face_list:
+                    if len(face_list) == 1:
+
+                        left, top, right, bottom = face_locations[idx]
                         bbox = np.array([left, top, right, bottom])
                         face = crop(cv2_img, bbox)
                         if face.size == 0:
@@ -210,11 +213,15 @@ class WikiFace:
 
         for cat in unseen_categories:
             try:
-                pgs = self.wikidata.page(title=cat, auto_suggest=False)
+                pgs.update([self.wikidata.page(title=cat, auto_suggest=False)])
             except DisambiguationError as e:
                 pages = self.wikidata.opensearch(cat)
                 pages = [page for page in pages if page[0] != cat]
                 pgs.update([page[0] for page in pages if ':' not in page[0]])
+            except Exception as e:
+                pages = self.wikidata.opensearch(cat)
+                pgs.update([page[0] for page in pages if ':' not in page[0]])
+
 
         for cat in unseen_categories:
             data = self.get_data(category=cat, results=10000)
