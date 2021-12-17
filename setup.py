@@ -14,16 +14,13 @@ setup(
     author_email='tford5@nd.edu',
     license='MIT License',
     packages=['wikifaces'],
-    install_requires=['facenet-pytorch',
-                      'ipython',
-                      'pip-chill',
+    install_requires=['requests'
+                      'facenet-pytorch',
                       'pymediawiki',
                       'tqdm',
                       'numpy',
                       'pillow',
-                      'insightface',
                       'opencv-python',
-                      'mxnet',
                       ],
 
     classifiers=[
