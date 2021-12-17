@@ -15,7 +15,7 @@ import numpy as np
 import requests
 from PIL import Image
 from facenet_pytorch import MTCNN
-from mediawiki import MediaWiki, MediaWikiPage
+from mediawiki import MediaWiki, MediaWikiPage, DisambiguationError
 from tqdm import tqdm
 
 from wikifaces.utilities import Person, ResizeWithAspectRatio, crop, pil_to_cv2, remove_empty_folders, verify_dir, \
@@ -199,21 +199,41 @@ class WikiFace:
     def get_pages(self, category, seen_categories=None, depth=0, max_depth=2) -> Set:
         if seen_categories is None:
             seen_categories = set()
-        self.descent_pbar.update(1)
+        try:
+            self.descent_pbar.update(1)
+        except Exception as e:
+            print('Running in Debug Mode.')
         pgs: Set = set()  # pages collected
+        # get immediate pages from disambiguation
         scs: Set = set()  # categories collected
         unseen_categories = category.difference(seen_categories)
+
+        for cat in unseen_categories:
+            try:
+                pgs = self.wikidata.page(title=cat, auto_suggest=False)
+            except DisambiguationError as e:
+                pages = self.wikidata.opensearch(cat)
+                pages = [page for page in pages if page[0] != cat]
+                pgs.update([page[0] for page in pages if ':' not in page[0]])
+
         for cat in unseen_categories:
             data = self.get_data(category=cat, results=10000)
             pgs.update(data[0])
             scs.update(data[1])
             seen_categories.add(cat)
+
         if depth >= max_depth or len(scs) == 0:
-            self.ascent_pbar.update(1)
+            try:
+                self.ascent_pbar.update(1)
+            except Exception as e:
+                print('Running in Debug Mode.')
             return pgs
 
         pgs.update(self.get_pages(scs, seen_categories=seen_categories, depth=depth + 1, max_depth=max_depth))
-        self.descent_pbar.update(1)
+        try:
+            self.descent_pbar.update(1)
+        except Exception as e:
+            print('Running in Debug Mode.')
         return pgs
 
     def get_data(self, category, results):
