@@ -2,11 +2,6 @@ requests
 numpy
 tqdm
 pillow
-setuptool
 facenet-pytorch
 pymediawiki
-twine
-insightface
 opencv-python
-mxnet
-onnxruntime
