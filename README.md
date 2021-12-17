@@ -43,7 +43,7 @@ python downloader -i "indonesian engineers" -o ../data/ -d
 #### Package Example
 
 ```python
-from wikifaces.downlaoder import WikiFace
+from wikifaces.downloader import WikiFace
 
 wikiface_obj = WikiFace()
 wikiface_obj.download(categories=['facebook'], depth=2, output_location='../data/')
