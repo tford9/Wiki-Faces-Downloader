@@ -5,7 +5,7 @@ with open('README.md', 'r') as f:
 
 setup(
     name='wikifaces',
-    version='1.0.4',
+    version='1.0.5',
     description='A downloader for named images containing faces from Wiki servers.',
     long_description=long_description,
     long_description_content_type="text/markdown",
