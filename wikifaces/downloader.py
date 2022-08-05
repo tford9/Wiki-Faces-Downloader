@@ -51,12 +51,6 @@ class WikiFace:
             return mod_person
         self.images_processed += 1
 
-        # if face detection object not loaded
-        # if self.face_detection_model is None or self.count > self.reinitialize_model_thresh:
-        #     self.count = 0
-        #     self.face_detection_model = FaceAnalysis()
-        #     self.face_detection_model.prepare(ctx_id=0)
-
         image_to_face_lookup = dict()
         faces_found = 0
 
@@ -138,7 +132,7 @@ class WikiFace:
             folder_name = '_'.join(re.findall('[\w\d\_]+', key.lower().replace(' ', '_')))
             output_path = f'{output_location}/{folder_name}/'
             verify_dir(output_path)
-            image_extensions = ['.jpg', '.png', '.gif']
+            image_extensions = ['.jpg', '.jpeg', '.png', '.gif']
 
             for idx, l in enumerate(_person.image_links):
                 # get filename
@@ -147,8 +141,8 @@ class WikiFace:
 
                 # make sure link points to image
                 _filename_, _file_extension = os.path.splitext(_filename)
-                if _file_extension not in image_extensions:
-                    # print(_file_extension)
+                if _file_extension.lower() not in image_extensions:
+                    print(f'Failed to download:{_filename}')
                     continue
 
                 # filename = filename.split('.')[0]
@@ -290,6 +284,10 @@ class WikiFace:
         cache_filename = f'{cat_output_directory}/cached_{len(initial_categories)}_people_pages_d{depth}.pkl'
         people_pages = {}
         dis_pages = []
+
+        people_related_categories = ['']
+        people_related_keywords = ['person', 'character', 'actor', 'human' , 'male', 'female', 'man', 'woman']
+
         if not verify_file(cache_filename):
             print(f'Number of Pages Collected: {len(pages)}')
             nonperson_pages = 0
@@ -301,9 +299,19 @@ class WikiFace:
                         page: MediaWikiPage = self.wikidata.page(title=p, auto_suggest=False)
                     except Exception as e:
                         dis_pages.append(e)
-                    if any(['people' in cat for cat in page.categories]) or 'born' in page.summary:
-                        nonperson_pages -= 1
+                        continue
+
+                    # search for people-like categories in the page data
+                    people_category_found = False
+                    for item in page.categories:
+                        for item2 in people_related_keywords:
+                            if item2 in item:
+                                people_category_found = True
+                                break
+
+                    if people_category_found or 'born' in page.summary:
                         if page.categories and not any([' stubs' in cat for cat in page.categories]):
+                            nonperson_pages -= 1
                             for img_link in page.images:
                                 parsed = urlparse(img_link)
                                 filename = os.path.basename(parsed.path)
