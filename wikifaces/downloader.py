@@ -75,7 +75,7 @@ class WikiFace:
             except Exception as e:
                 return mod_person
 
-            if face_locations is None or len(face_locations) == 0:
+            if face_locations is None or len(face_locations) != 1:
                 # print(f'No faces found in {image_filename}')
                 pass
             else:
