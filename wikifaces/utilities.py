@@ -87,7 +87,7 @@ def ResizeWithAspectRatio(image, width=None, height=None, inter=cv2.INTER_AREA):
     return cv2.resize(image, dim, interpolation=inter)
 
 
-def crop(image, bbox, margin=20, square=False, dy_margin=False):
+def crop(image, bbox, margin=50, square=False, dy_margin=False):
     """Crop the image given bounding box.
     Params:
         image: a numpy array
