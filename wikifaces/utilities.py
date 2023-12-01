@@ -1,7 +1,11 @@
 import os
+from pathlib import Path
+from typing import Dict
 
+import asks
 import cv2
 import numpy as np
+import trio
 
 
 class Person:
@@ -115,6 +119,37 @@ def crop(image, bbox, margin=20, square=False, dy_margin=False):
 
 def pil_to_cv2(img):
     return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+
+
+async def fetch_pic(s, url):
+    r = await s.get(url)
+    if str(r) != "<Response 200 OK>":
+        print(str(r), url)
+    return r.content
+
+
+async def save_pic(s, _id, url):
+    try:
+        content = await fetch_pic(s, url)
+        ext = os.path.splitext(url)[1]
+        filename = f"/nfs/datasets/WIT/images/{_id}{ext}"
+        with open(filename, 'wb') as f:
+            f.write(content)
+
+    except Exception as e:
+        print("ERROR:", e)
+
+
+async def main(links):
+    domain_name = 'https://upload.wikimedia.org'
+    s = asks.sessions.Session(domain_name, connections=4)
+    async with trio.open_nursery() as n:
+        for _id, url in links:
+            n.start_soon(save_pic, s, _id, url)
+
+
+def bulk_image_download(dir: str, links):
+    trio.run(main, links)
 
 
 def remove_empty_folders(path_abs):

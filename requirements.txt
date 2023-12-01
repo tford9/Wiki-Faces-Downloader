@@ -1,7 +1,10 @@
-requests
-numpy
-tqdm
-pillow
+requests~=2.31.0
+numpy~=1.25.2
+tqdm~=4.66.1
+pillow~=10.0.0
 facenet-pytorch
 pymediawiki
-opencv-python
+opencv-python~=4.8.0.76
+setuptools~=65.5.1
+asks~=3.0.0
+trio~=0.22.2

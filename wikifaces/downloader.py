@@ -90,7 +90,7 @@ class WikiFace:
 
                         left, top, right, bottom = face_locations[idx]
                         bbox = np.array([left, top, right, bottom])
-                        face = crop(cv2_img, bbo, dy_margin=True)
+                        face = crop(cv2_img, bbox, dy_margin=True)
                         if face.size == 0:
                             continue
                         mod_person.add_face_images(faces_found, face)
