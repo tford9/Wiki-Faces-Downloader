@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wikifaces"
+version = "1.0.8"
+authors = [
+  { name ="Trenton W. Ford", email ="twford@wm.edu" },
+  { name ="Ruiting Shao", email ="shao72@purdue.edu"},
+]
+description = "A downloader for named images containing faces from Wiki servers."
+readme = "README.md"
+requires-python = ">=3.8"
+license ='MIT'
+dependencies =[
+    'requests',
+    'facenet-pytorch',
+    'pymediawiki',
+    'tqdm',
+    'numpy',
+    'pillow',
+    'opencv-python',
+]
+
+
+classifiers = [
+    'Development Status :: 4 - Beta',
+    'Intended Audience :: Science/Research',
+    'License :: OSI Approved :: MIT License',
+    'Operating System :: POSIX :: Linux',
+    'Programming Language :: Python :: 3.8',
+    'Programming Language :: Python :: 3.9',
+]
+
+[project.urls]
+Homepage = "https://github.com/tford9/Wiki-Faces-Downloader"
+Issues = "https://github.com/tford9/Wiki-Faces-Downloader/issues"
+
+[project.optional-dependencies]
+dev = [
+    "pylint ~=2.14.0",
+    "toml ~=0.10.2",
+    "yapf ~=0.32.0",
+]

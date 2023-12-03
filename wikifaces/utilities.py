@@ -154,6 +154,11 @@ def bulk_image_download(dir: str, links):
 
 def remove_empty_folders(path_abs):
     walk = list(os.walk(path_abs))
+    remaining_paths = []
     for path, _, _ in walk[::-1]:
         if len(os.listdir(path)) == 0:
             os.rmdir(path)
+        else:
+            remaining_paths.append(path)
+            
+    return remaining_paths
